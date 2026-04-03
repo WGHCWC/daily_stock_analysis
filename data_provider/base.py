@@ -896,7 +896,13 @@ class DataFetcherManager:
             logger.error(f"[预取] 批量预取异常: {e}")
             return 0
     
-    def get_realtime_quote(self, stock_code: str):
+    def get_realtime_quote(
+        self,
+        stock_code: str,
+        *,
+        source_priority: Optional[List[str]] = None,
+        supplement_missing_fields: bool = True,
+    ):
         """
         获取实时行情数据（自动故障切换）
         
@@ -961,15 +967,15 @@ class DataFetcherManager:
             logger.warning(f"[实时行情] 美股 {stock_code} 无可用数据源")
             return None
         
-        # 获取配置的数据源优先级
-        source_priority = config.realtime_source_priority.split(',')
+        # 获取配置的数据源优先级，允许调用方覆盖
+        configured_priority = source_priority or config.realtime_source_priority.split(',')
         
         errors = []
         # primary_quote holds the first successful result; we may supplement
         # missing fields (volume_ratio, turnover_rate, etc.) from later sources.
         primary_quote = None
         
-        for source in source_priority:
+        for source in configured_priority:
             source = source.strip().lower()
             
             try:
@@ -1020,6 +1026,8 @@ class DataFetcherManager:
                         # First successful source becomes primary
                         primary_quote = quote
                         logger.info(f"[实时行情] {stock_code} 成功获取 (来源: {source})")
+                        if not supplement_missing_fields:
+                            return primary_quote
                         # If all key supplementary fields are present, return early
                         if not self._quote_needs_supplement(primary_quote):
                             return primary_quote

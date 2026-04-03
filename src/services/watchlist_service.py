@@ -34,6 +34,7 @@ WATCHLIST_CODE_PATTERNS = (
     re.compile(r"^\d{5}$"),
     re.compile(r"^[A-Z]{1,6}(\.[A-Z]{1,2})?$", re.IGNORECASE),
 )
+WATCHLIST_ADD_REALTIME_SOURCES = ("tushare", "tencent", "akshare_sina")
 
 
 class WatchlistError(Exception):
@@ -102,6 +103,8 @@ class WatchlistService:
             include_intraday=True,
             allow_history_fallback=False,
             fetch_manager=fetch_manager,
+            preferred_realtime_sources=WATCHLIST_ADD_REALTIME_SOURCES,
+            supplement_realtime_fields=False,
         )
         if snapshot.get("current_price") is None or snapshot.get("reference_price") is None:
             raise WatchlistError(f"{code} 基础行情获取失败，请稍后重试")
@@ -331,6 +334,8 @@ class WatchlistService:
         include_intraday: bool = False,
         allow_history_fallback: bool = True,
         fetch_manager: Optional[DataFetcherManager] = None,
+        preferred_realtime_sources: Optional[List[str] | tuple[str, ...]] = None,
+        supplement_realtime_fields: bool = True,
     ) -> Dict[str, Any]:
         name = (preferred_name or "").strip() or None
         current_price: Optional[float] = None
@@ -342,7 +347,11 @@ class WatchlistService:
             manager = fetch_manager
             if include_intraday:
                 manager = manager or DataFetcherManager()
-                quote = manager.get_realtime_quote(code)
+                quote = manager.get_realtime_quote(
+                    code,
+                    source_priority=list(preferred_realtime_sources) if preferred_realtime_sources else None,
+                    supplement_missing_fields=supplement_realtime_fields,
+                )
                 if quote is not None:
                     quote_name = getattr(quote, "name", None)
                     quote_price = self._to_float(getattr(quote, "price", None))

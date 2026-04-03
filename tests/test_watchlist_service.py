@@ -47,6 +47,8 @@ class WatchlistServiceTestCase(unittest.TestCase):
             include_intraday: bool = False,
             allow_history_fallback: bool = True,
             fetch_manager=None,
+            preferred_realtime_sources=None,
+            supplement_realtime_fields: bool = True,
         ):
             mapping = {
                 "600519": {"name": "贵州茅台", "current_price": 1800.0, "reference_price": 1800.0, "market_date": date(2026, 4, 3), "updated_at_dt": datetime(2026, 4, 3, 15, 10, 0)},
@@ -78,6 +80,11 @@ class WatchlistServiceTestCase(unittest.TestCase):
         self.assertEqual(item["code"], "300750")
         self.assertEqual(item["name"], "宁德时代")
         self.assertEqual(fetch_snapshot.call_args.kwargs.get("allow_history_fallback"), False)
+        self.assertEqual(
+            tuple(fetch_snapshot.call_args.kwargs.get("preferred_realtime_sources", ())),
+            ("tushare", "tencent", "akshare_sina"),
+        )
+        self.assertFalse(fetch_snapshot.call_args.kwargs.get("supplement_realtime_fields", True))
         env_content = self.env_path.read_text(encoding="utf-8")
         self.assertIn("STOCK_LIST=600519,000001,300750", env_content)
 
@@ -311,6 +318,8 @@ class WatchlistServiceTestCase(unittest.TestCase):
             include_intraday: bool = False,
             allow_history_fallback: bool = True,
             fetch_manager=None,
+            preferred_realtime_sources=None,
+            supplement_realtime_fields: bool = True,
         ):
             mapping = {
                 "600519": {

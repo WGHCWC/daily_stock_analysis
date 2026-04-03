@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - 📋 **Watchlist management page** — Web 新增股票管理页，展示股票名称、代码、添加日期、添加后涨幅与缓存更新时间；新增入口改为弹窗，支持批量输入代码（逗号/换行分隔）、后台非阻塞添加、运行中取消后台添加、刷新后恢复批量任务进度、由后端统一校验并将成功项同步进自选股列表、新增时优先只拉取名称和当前价等轻量信息以提升速度、手动刷新缓存、以及一键调用原有分析流程，并与 legacy `STOCK_LIST` 自动同步；涨幅默认走缓存，仅在手动刷新或各市场收盘后自动更新；成功/失败结果通知收敛到日志页
+- ⚡ **Watchlist add Tushare priority** — 自选股新增链路现在会优先使用 Tushare 单股票实时接口获取基础行情，成功拿到价格后立即返回，不再为了补充量比等字段继续尝试后续慢源；失败时再回退到其他轻量单股票数据源
 - 🩹 **Watchlist cancel feedback** — 修复股票管理页取消后台添加时长时间停留在“取消中”的问题；现在点击取消后前端会立即进入最终取消态并停止恢复旧任务，后台仅允许当前正在处理的股票自然收尾，不再继续后续代码
 - 🗒️ **Global log page** — Web 新增全局日志页面，日志持久化保存在后端 `operation_logs` 表中；当前已接入自选股批量新增链路，逐条成功/失败结果及任务汇总结果都可在日志页按分类/状态查看，并支持分页浏览，每页最多 20 条
 - 🛠️ **Docker rebuild compatibility script** — `start.sh` now rebuilds via classic `DOCKER_BUILDKIT=0 docker build` and then runs `docker compose up -d --no-build --force-recreate`, avoiding `compose build` / Buildx version requirements on older servers
