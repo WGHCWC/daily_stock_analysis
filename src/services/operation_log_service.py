@@ -24,12 +24,29 @@ class OperationLogService:
     def list_logs(
         self,
         *,
-        limit: int = 100,
+        page: int = 1,
+        page_size: int = 20,
         category: Optional[str] = None,
         status: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        rows = self._repo.list_recent(limit=limit, category=category, status=status)
-        return [row.to_dict() for row in rows]
+    ) -> Dict[str, Any]:
+        safe_page_size = max(1, min(page_size, 20))
+        total = self._repo.count_recent(category=category, status=status)
+        total_pages = max(1, (total + safe_page_size - 1) // safe_page_size) if total > 0 else 1
+        safe_page = min(max(1, page), total_pages)
+        offset = (safe_page - 1) * safe_page_size
+        rows = self._repo.list_recent(
+            limit=safe_page_size,
+            offset=offset,
+            category=category,
+            status=status,
+        )
+        return {
+            "items": [row.to_dict() for row in rows],
+            "total": total,
+            "page": safe_page,
+            "page_size": safe_page_size,
+            "total_pages": total_pages,
+        }
 
     def record(
         self,

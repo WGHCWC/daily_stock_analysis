@@ -83,7 +83,6 @@ const StocksPage: React.FC = () => {
   const [deletingCode, setDeletingCode] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<ParsedApiError | null>(null);
   const [actionError, setActionError] = useState<ParsedApiError | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<WatchlistItem | null>(null);
   const [addTask, setAddTask] = useState<WatchlistBatchTask | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -98,14 +97,6 @@ const StocksPage: React.FC = () => {
       setActiveTaskId(storedTaskId);
     }
   }, []);
-
-  useEffect(() => {
-    if (!successMessage) {
-      return;
-    }
-    const timer = window.setTimeout(() => setSuccessMessage(null), 3200);
-    return () => window.clearTimeout(timer);
-  }, [successMessage]);
 
   useEffect(() => {
     if (!activeTaskId) {
@@ -129,6 +120,7 @@ const StocksPage: React.FC = () => {
           finishHandled = true;
           setActiveTaskId(null);
           window.localStorage.removeItem(WATCHLIST_BATCH_TASK_STORAGE_KEY);
+          setAddTask(null);
           if (timer !== null) {
             window.clearInterval(timer);
             timer = null;
@@ -146,12 +138,10 @@ const StocksPage: React.FC = () => {
           finishHandled = true;
           setActiveTaskId(null);
           window.localStorage.removeItem(WATCHLIST_BATCH_TASK_STORAGE_KEY);
+          setAddTask(null);
           if (timer !== null) {
             window.clearInterval(timer);
             timer = null;
-          }
-          if (task.errorMessage) {
-            setActionError(getParsedApiError(task.errorMessage));
           }
         }
       } catch (error) {
@@ -207,7 +197,6 @@ const StocksPage: React.FC = () => {
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setActionError(null);
-    setSuccessMessage(null);
 
     const rawCodes = splitBatchCodes(code);
     if (rawCodes.length === 0) {
@@ -244,7 +233,6 @@ const StocksPage: React.FC = () => {
     setDeletingCode(pendingDelete.code);
     try {
       await stocksApi.deleteWatchlistStock(pendingDelete.code);
-      setSuccessMessage(`${pendingDelete.code} 已从自选股移除`);
       setPendingDelete(null);
       await loadWatchlist();
     } catch (error) {
@@ -279,13 +267,7 @@ const StocksPage: React.FC = () => {
     completed: addTask?.completed ?? 0,
     total: addTask?.total ?? 0,
   };
-  const failedResults = (addTask?.results ?? []).filter((result) => result.status === 'error');
-  const shouldShowAddPanel = Boolean(
-    isAddJobRunning
-    || failedResults.length > 0
-    || addTask?.status === 'failed'
-    || addTask?.status === 'cancelled'
-  );
+  const shouldShowAddPanel = Boolean(isAddJobRunning);
 
   return (
     <div className="min-h-screen px-4 pb-6 pt-4 md:px-6">
@@ -353,11 +335,6 @@ const StocksPage: React.FC = () => {
 
           {loadError ? <ApiErrorAlert error={loadError} className="mb-4" /> : null}
           {actionError ? <ApiErrorAlert error={actionError} className="mb-4" /> : null}
-          {successMessage ? (
-            <div className="mb-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-              {successMessage}
-            </div>
-          ) : null}
 
           {shouldShowAddPanel ? (
             <div className="mb-4 rounded-2xl border border-white/8 bg-elevated/45 p-4">
@@ -366,13 +343,7 @@ const StocksPage: React.FC = () => {
                   <div className="text-sm font-medium text-white">
                     {addTask?.status === 'cancelling'
                       ? '正在取消后台添加'
-                      : addTask?.status === 'running'
-                        ? '股票正在后台添加'
-                        : addTask?.status === 'cancelled'
-                          ? '后台添加已取消'
-                          : addTask?.status === 'failed'
-                            ? '后台任务执行失败'
-                            : '添加失败代码'}
+                      : '股票正在后台添加'}
                   </div>
                   <div className="mt-1 text-xs text-secondary">
                     {addProgress.total > 0
@@ -391,19 +362,6 @@ const StocksPage: React.FC = () => {
                       {addTask?.status === 'cancelling' ? '取消中...' : '取消后台添加'}
                     </button>
                   ) : null}
-                  {failedResults.length > 0 || addTask?.status === 'failed' || addTask?.status === 'cancelled' ? (
-                    <button
-                      type="button"
-                      className="rounded-xl border border-white/10 px-3 py-2 text-sm text-secondary transition hover:border-white/20 hover:text-white"
-                      onClick={() => {
-                        setAddTask(null);
-                        setActiveTaskId(null);
-                        window.localStorage.removeItem(WATCHLIST_BATCH_TASK_STORAGE_KEY);
-                      }}
-                    >
-                      清空结果
-                    </button>
-                  ) : null}
                 </div>
               </div>
 
@@ -413,31 +371,6 @@ const StocksPage: React.FC = () => {
                     className="h-full rounded-full bg-cyan transition-all"
                     style={{ width: `${Math.min(100, (addProgress.completed / Math.max(addProgress.total, 1)) * 100)}%` }}
                   />
-                </div>
-              ) : null}
-
-              {failedResults.length > 0 ? (
-                <div className="mt-4 max-h-52 space-y-2 overflow-y-auto pr-1">
-                  {failedResults.map((result) => (
-                    <div
-                      key={`${result.code}-${result.status}-${result.message}`}
-                      className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
-                    >
-                      <span className="font-mono">{result.code}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-
-              {addTask?.status === 'failed' && addTask.errorMessage ? (
-                <div className="mt-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-                  {addTask.errorMessage}
-                </div>
-              ) : null}
-
-              {addTask?.status === 'cancelled' ? (
-                <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-                  后台添加已取消，未开始的股票不会继续处理。
                 </div>
               ) : null}
             </div>

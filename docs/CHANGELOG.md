@@ -10,9 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- 📋 **Watchlist management page** — Web 新增股票管理页，展示股票名称、代码、添加日期、添加后涨幅与缓存更新时间；新增入口改为弹窗，支持批量输入代码（逗号/换行分隔）、后台非阻塞添加、运行中取消后台添加、刷新后恢复批量任务进度、由后端统一校验并将成功项同步进自选股列表、失败时仅展示失败代码、新增时优先只拉取名称和当前价等轻量信息以提升速度、手动刷新缓存、以及一键调用原有分析流程，并与 legacy `STOCK_LIST` 自动同步；涨幅默认走缓存，仅在手动刷新或各市场收盘后自动更新
+- 📋 **Watchlist management page** — Web 新增股票管理页，展示股票名称、代码、添加日期、添加后涨幅与缓存更新时间；新增入口改为弹窗，支持批量输入代码（逗号/换行分隔）、后台非阻塞添加、运行中取消后台添加、刷新后恢复批量任务进度、由后端统一校验并将成功项同步进自选股列表、新增时优先只拉取名称和当前价等轻量信息以提升速度、手动刷新缓存、以及一键调用原有分析流程，并与 legacy `STOCK_LIST` 自动同步；涨幅默认走缓存，仅在手动刷新或各市场收盘后自动更新；成功/失败结果通知收敛到日志页
 - 🩹 **Watchlist cancel feedback** — 修复股票管理页取消后台添加时长时间停留在“取消中”的问题；现在点击取消后前端会立即进入最终取消态并停止恢复旧任务，后台仅允许当前正在处理的股票自然收尾，不再继续后续代码
-- 🗒️ **Global log page** — Web 新增全局日志页面，日志持久化保存在后端 `operation_logs` 表中；当前已接入自选股批量新增链路，逐条成功/失败结果及任务汇总结果都可在日志页按分类/状态查看
+- 🗒️ **Global log page** — Web 新增全局日志页面，日志持久化保存在后端 `operation_logs` 表中；当前已接入自选股批量新增链路，逐条成功/失败结果及任务汇总结果都可在日志页按分类/状态查看，并支持分页浏览，每页最多 20 条
 - 🛠️ **Docker rebuild compatibility script** — `start.sh` now rebuilds via classic `DOCKER_BUILDKIT=0 docker build` and then runs `docker compose up -d --no-build --force-recreate`, avoiding `compose build` / Buildx version requirements on older servers
 - 🔔 **Server酱3 Web settings entry** — notification settings now expose `SERVERCHAN3_SENDKEY` with dedicated UI copy so Server酱 can be configured directly from the Web settings page
 - ⚙️ **Tushare proxy + fallback config** — Web settings now expose `TUSHARE_PROXY_URL` and `TUSHARE_PROXY_TOKEN`; Tushare requests prefer the proxy endpoint and automatically fallback to the official endpoint with `TUSHARE_TOKEN` on failure

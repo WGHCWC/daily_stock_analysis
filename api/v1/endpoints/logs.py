@@ -27,14 +27,21 @@ router = APIRouter()
     description="返回最近的系统操作日志，可按分类或状态筛选。",
 )
 def get_operation_logs(
-    limit: int = Query(100, ge=1, le=500, description="返回条数"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=20, description="每页条数，最大 20"),
     category: Optional[str] = Query(None, description="分类筛选"),
     status: Optional[str] = Query(None, description="状态筛选"),
     service: OperationLogService = Depends(get_operation_log_service),
 ) -> OperationLogListResponse:
     try:
-        items = service.list_logs(limit=limit, category=category, status=status)
-        return OperationLogListResponse(items=[OperationLogItem(**item) for item in items])
+        payload = service.list_logs(page=page, page_size=page_size, category=category, status=status)
+        return OperationLogListResponse(
+            items=[OperationLogItem(**item) for item in payload["items"]],
+            total=payload["total"],
+            page=payload["page"],
+            page_size=payload["page_size"],
+            total_pages=payload["total_pages"],
+        )
     except Exception as exc:
         logger.error("获取操作日志失败: %s", exc, exc_info=True)
         raise HTTPException(

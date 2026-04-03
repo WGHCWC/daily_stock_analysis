@@ -27,3 +27,7 @@ class OperationLogListResponse(BaseModel):
     """操作日志列表响应。"""
 
     items: List[OperationLogItem] = Field(default_factory=list, description="日志列表")
+    total: int = Field(0, description="符合筛选条件的总记录数")
+    page: int = Field(1, description="当前页码")
+    page_size: int = Field(20, description="每页条数")
+    total_pages: int = Field(1, description="总页数")

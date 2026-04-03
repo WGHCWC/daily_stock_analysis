@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 
 from src.storage import DatabaseManager, OperationLog
 
@@ -65,13 +65,34 @@ class OperationLogRepository:
         self,
         *,
         limit: int = 100,
+        offset: int = 0,
         category: Optional[str] = None,
         status: Optional[str] = None,
     ) -> List[OperationLog]:
         with self.db.get_session() as session:
-            stmt = select(OperationLog).order_by(desc(OperationLog.created_at), desc(OperationLog.id)).limit(limit)
+            stmt = (
+                select(OperationLog)
+                .order_by(desc(OperationLog.created_at), desc(OperationLog.id))
+                .offset(max(0, offset))
+                .limit(limit)
+            )
             if category:
                 stmt = stmt.where(OperationLog.category == category)
             if status:
                 stmt = stmt.where(OperationLog.status == status)
             return list(session.execute(stmt).scalars().all())
+
+    def count_recent(
+        self,
+        *,
+        category: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> int:
+        with self.db.get_session() as session:
+            stmt = select(func.count()).select_from(OperationLog)
+            if category:
+                stmt = stmt.where(OperationLog.category == category)
+            if status:
+                stmt = stmt.where(OperationLog.status == status)
+            result = session.execute(stmt).scalar_one()
+            return int(result or 0)

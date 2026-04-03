@@ -4,6 +4,8 @@ import { ApiErrorAlert } from '../components/common';
 import { getParsedApiError, type ParsedApiError } from '../api/error';
 import { logsApi, type OperationLogItem } from '../api/logs';
 
+const LOGS_PAGE_SIZE = 20;
+
 const formatDateTime = (value?: string | null): string => {
   if (!value) {
     return '--';
@@ -51,27 +53,37 @@ const LogsPage: React.FC = () => {
   const [error, setError] = useState<ParsedApiError | null>(null);
   const [category, setCategory] = useState('all');
   const [status, setStatus] = useState('all');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const loadLogs = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const nextItems = await logsApi.getLogs({
-        limit: 200,
+      const result = await logsApi.getLogs({
+        page,
+        pageSize: LOGS_PAGE_SIZE,
         category: category === 'all' ? undefined : category,
         status: status === 'all' ? undefined : status,
       });
-      setItems(nextItems);
+      setItems(result.items);
+      setTotal(result.total);
+      setTotalPages(result.totalPages);
     } catch (loadError) {
       setError(getParsedApiError(loadError));
     } finally {
       setIsLoading(false);
     }
-  }, [category, status]);
+  }, [category, page, status]);
 
   useEffect(() => {
     void loadLogs();
   }, [loadLogs]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [category, status]);
 
   const successCount = items.filter((item) => item.status === 'success').length;
   const errorCount = items.filter((item) => item.status === 'error').length;
@@ -93,14 +105,14 @@ const LogsPage: React.FC = () => {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:min-w-[420px]">
             <div className="rounded-2xl border border-white/10 bg-elevated/70 p-4">
               <div className="text-xs uppercase tracking-[0.2em] text-muted">日志总数</div>
-              <div className="mt-2 text-2xl font-semibold text-white">{items.length}</div>
+              <div className="mt-2 text-2xl font-semibold text-white">{total}</div>
             </div>
             <div className="rounded-2xl border border-white/10 bg-elevated/70 p-4">
-              <div className="text-xs uppercase tracking-[0.2em] text-muted">成功 / 部分</div>
+              <div className="text-xs uppercase tracking-[0.2em] text-muted">当前页成功 / 部分</div>
               <div className="mt-2 text-2xl font-semibold text-emerald-300">{successCount} / {partialCount}</div>
             </div>
             <div className="rounded-2xl border border-white/10 bg-elevated/70 p-4">
-              <div className="text-xs uppercase tracking-[0.2em] text-muted">失败数量</div>
+              <div className="text-xs uppercase tracking-[0.2em] text-muted">当前页失败</div>
               <div className="mt-2 text-2xl font-semibold text-rose-300">{errorCount}</div>
             </div>
           </div>
@@ -112,7 +124,7 @@ const LogsPage: React.FC = () => {
           <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-white">日志流水</h2>
-              <p className="mt-1 text-sm text-secondary">按时间倒序展示最近 200 条操作记录。</p>
+              <p className="mt-1 text-sm text-secondary">按时间倒序展示日志，分页浏览，每页最多 20 条。</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <select
@@ -203,6 +215,32 @@ const LogsPage: React.FC = () => {
               ))}
             </div>
           )}
+
+          {!isLoading && total > 0 ? (
+            <div className="mt-4 flex flex-col gap-3 border-t border-white/8 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-secondary">
+                第 {page} / {Math.max(totalPages, 1)} 页，每页 {LOGS_PAGE_SIZE} 条，共 {total} 条
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={isLoading || page <= 1}
+                >
+                  上一页
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={isLoading || page >= totalPages}
+                >
+                  下一页
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
     </div>

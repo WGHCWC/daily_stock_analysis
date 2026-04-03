@@ -15,12 +15,21 @@ export type OperationLogItem = {
   createdAt?: string | null;
 };
 
+export type OperationLogPage = {
+  items: OperationLogItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
 export const logsApi = {
   async getLogs(params?: {
-    limit?: number;
+    page?: number;
+    pageSize?: number;
     category?: string;
     status?: string;
-  }): Promise<OperationLogItem[]> {
+  }): Promise<OperationLogPage> {
     const response = await apiClient.get<{
       items?: Array<{
         id: number;
@@ -36,21 +45,38 @@ export const logsApi = {
         details?: Record<string, unknown> | null;
         created_at?: string | null;
       }>;
-    }>('/api/v1/logs', { params });
+      total?: number;
+      page?: number;
+      page_size?: number;
+      total_pages?: number;
+    }>('/api/v1/logs', {
+      params: {
+        page: params?.page,
+        page_size: params?.pageSize,
+        category: params?.category,
+        status: params?.status,
+      },
+    });
 
-    return (response.data.items ?? []).map((item) => ({
-      id: item.id,
-      category: item.category,
-      action: item.action,
-      level: item.level,
-      status: item.status,
-      title: item.title,
-      message: item.message,
-      stockCode: item.stock_code,
-      stockName: item.stock_name,
-      taskId: item.task_id,
-      details: item.details,
-      createdAt: item.created_at,
-    }));
+    return {
+      items: (response.data.items ?? []).map((item) => ({
+        id: item.id,
+        category: item.category,
+        action: item.action,
+        level: item.level,
+        status: item.status,
+        title: item.title,
+        message: item.message,
+        stockCode: item.stock_code,
+        stockName: item.stock_name,
+        taskId: item.task_id,
+        details: item.details,
+        createdAt: item.created_at,
+      })),
+      total: response.data.total ?? 0,
+      page: response.data.page ?? 1,
+      pageSize: response.data.page_size ?? 20,
+      totalPages: response.data.total_pages ?? 1,
+    };
   },
 };
