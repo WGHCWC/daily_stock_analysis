@@ -249,6 +249,8 @@ Docker 全量重建发布可直接执行仓库根目录下的 `start.sh`：
 ./start.sh
 ```
 
+脚本会自动关闭 `docker compose build` 的 bake 模式（`COMPOSE_BAKE=false`），兼容较旧的 Docker Buildx 环境。
+
 ## 📱 推送效果
 
 ### 决策仪表盘

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- 🛠️ **Legacy Docker Compose build compatibility** — `start.sh` now sets `COMPOSE_BAKE=false` so full rebuild deploys continue to work on servers with older Docker Buildx plugins
 - 🚀 **Docker full rebuild script** — added root `start.sh` to run `down -> build --no-cache -> up -d` for full Docker Compose deployment refresh
 - 🔔 **Server酱3 Web settings entry** — notification settings now expose `SERVERCHAN3_SENDKEY` with dedicated UI copy so Server酱 can be configured directly from the Web settings page
 - ⚙️ **Tushare proxy + fallback config** — Web settings now expose `TUSHARE_PROXY_URL` and `TUSHARE_PROXY_TOKEN`; Tushare requests prefer the proxy endpoint and automatically fallback to the official endpoint with `TUSHARE_TOKEN` on failure
