@@ -14,14 +14,22 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 
+from api.deps import get_watchlist_service
 from api.v1.schemas.stocks import (
     ExtractFromImageResponse,
     ExtractItem,
     KLineData,
     StockHistoryResponse,
     StockQuote,
+    WatchlistAddRequest,
+    WatchlistAddResponse,
+    WatchlistBatchAddRequest,
+    WatchlistBatchTaskResponse,
+    WatchlistDeleteResponse,
+    WatchlistResponse,
+    WatchlistStockItem,
 )
 from api.v1.schemas.common import ErrorResponse
 from src.services.image_stock_extractor import (
@@ -35,6 +43,13 @@ from src.services.import_parser import (
     parse_import_from_text,
 )
 from src.services.stock_service import StockService
+from src.services.watchlist_service import (
+    WatchlistDuplicateError,
+    WatchlistNotFoundError,
+    WatchlistError,
+    WatchlistService,
+    WatchlistTaskNotFoundError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +57,22 @@ router = APIRouter()
 
 # 须在 /{stock_code} 路由之前定义
 ALLOWED_MIME_STR = ", ".join(ALLOWED_MIME)
+
+
+def _to_watchlist_item(payload: dict) -> WatchlistStockItem:
+    return WatchlistStockItem(
+        code=payload["code"],
+        name=payload["name"],
+        added_at=payload.get("added_at"),
+        added_price=payload.get("added_price"),
+        current_price=payload.get("current_price"),
+        gain_percent=payload.get("gain_percent"),
+        updated_at=payload.get("updated_at"),
+    )
+
+
+def _to_watchlist_batch_task(payload: dict) -> WatchlistBatchTaskResponse:
+    return WatchlistBatchTaskResponse(**payload)
 
 
 @router.post(
@@ -237,6 +268,186 @@ async def parse_import(request: Request) -> ExtractFromImageResponse:
     ]
     codes = list(dict.fromkeys(i.code for i in extract_items if i.code))
     return ExtractFromImageResponse(codes=codes, items=extract_items, raw_text=None)
+
+
+@router.get(
+    "/watchlist",
+    response_model=WatchlistResponse,
+    responses={
+        200: {"description": "自选股列表"},
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="获取自选股列表",
+    description="返回自选股管理页所需的列表数据，并与 legacy STOCK_LIST 保持同步。",
+)
+def get_watchlist(
+    refresh: bool = Query(False, description="是否手动强制刷新缓存行情"),
+    service: WatchlistService = Depends(get_watchlist_service),
+) -> WatchlistResponse:
+    try:
+        items = service.list_watchlist(force_refresh=refresh)
+        return WatchlistResponse(items=[_to_watchlist_item(item) for item in items])
+    except Exception as e:
+        logger.error("获取自选股列表失败: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "internal_error", "message": f"获取自选股列表失败: {str(e)}"},
+        )
+
+
+@router.post(
+    "/watchlist",
+    response_model=WatchlistAddResponse,
+    responses={
+        200: {"description": "添加成功"},
+        409: {"description": "股票已存在", "model": ErrorResponse},
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="新增自选股",
+    description="新增自选股并同步回写 STOCK_LIST。",
+)
+def add_watchlist_stock(
+    request: WatchlistAddRequest,
+    service: WatchlistService = Depends(get_watchlist_service),
+) -> WatchlistAddResponse:
+    try:
+        item = service.add_stock(request.code, name=request.name)
+        return WatchlistAddResponse(success=True, item=_to_watchlist_item(item))
+    except WatchlistDuplicateError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "watchlist_duplicate", "message": str(e)},
+        )
+    except Exception as e:
+        logger.error("新增自选股失败: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "internal_error", "message": f"新增自选股失败: {str(e)}"},
+        )
+
+
+@router.post(
+    "/watchlist/batch",
+    response_model=WatchlistBatchTaskResponse,
+    responses={
+        200: {"description": "批量任务已创建"},
+        400: {"description": "请求参数无效", "model": ErrorResponse},
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="批量新增自选股",
+    description="以后台任务方式批量新增自选股，单只股票失败会跳过并继续处理后续股票，刷新页面后可继续查询进度。",
+)
+def start_watchlist_batch_add(
+    request: WatchlistBatchAddRequest,
+    service: WatchlistService = Depends(get_watchlist_service),
+) -> WatchlistBatchTaskResponse:
+    try:
+        task = service.start_batch_add(request.codes, name=request.name)
+        return _to_watchlist_batch_task(task)
+    except WatchlistError as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "bad_request", "message": str(e)},
+        )
+    except Exception as e:
+        logger.error("创建自选股批量添加任务失败: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "internal_error", "message": f"创建批量任务失败: {str(e)}"},
+        )
+
+
+@router.get(
+    "/watchlist/batch/{task_id}",
+    response_model=WatchlistBatchTaskResponse,
+    responses={
+        200: {"description": "批量任务状态"},
+        404: {"description": "任务不存在", "model": ErrorResponse},
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="获取自选股批量添加任务状态",
+    description="返回批量新增自选股任务的执行进度与结果，可用于页面刷新后恢复展示。",
+)
+def get_watchlist_batch_add_task(
+    task_id: str,
+    service: WatchlistService = Depends(get_watchlist_service),
+) -> WatchlistBatchTaskResponse:
+    try:
+        task = service.get_batch_add_task(task_id)
+        return _to_watchlist_batch_task(task)
+    except WatchlistTaskNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "watchlist_task_not_found", "message": str(e)},
+        )
+    except Exception as e:
+        logger.error("获取自选股批量任务失败: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "internal_error", "message": f"获取批量任务失败: {str(e)}"},
+        )
+
+
+@router.post(
+    "/watchlist/batch/{task_id}/cancel",
+    response_model=WatchlistBatchTaskResponse,
+    responses={
+        200: {"description": "批量任务取消状态"},
+        404: {"description": "任务不存在", "model": ErrorResponse},
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="取消自选股批量添加任务",
+    description="请求取消正在执行的批量新增任务；当前正在处理的股票完成后将停止后续任务。",
+)
+def cancel_watchlist_batch_add_task(
+    task_id: str,
+    service: WatchlistService = Depends(get_watchlist_service),
+) -> WatchlistBatchTaskResponse:
+    try:
+        task = service.cancel_batch_add_task(task_id)
+        return _to_watchlist_batch_task(task)
+    except WatchlistTaskNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "watchlist_task_not_found", "message": str(e)},
+        )
+    except Exception as e:
+        logger.error("取消自选股批量任务失败: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "internal_error", "message": f"取消批量任务失败: {str(e)}"},
+        )
+
+
+@router.delete(
+    "/watchlist/{stock_code}",
+    response_model=WatchlistDeleteResponse,
+    responses={
+        200: {"description": "删除成功"},
+        404: {"description": "股票不存在", "model": ErrorResponse},
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="删除自选股",
+    description="删除自选股并同步回写 STOCK_LIST。",
+)
+def delete_watchlist_stock(
+    stock_code: str,
+    service: WatchlistService = Depends(get_watchlist_service),
+) -> WatchlistDeleteResponse:
+    try:
+        service.delete_stock(stock_code)
+        return WatchlistDeleteResponse(success=True, code=stock_code.strip().upper())
+    except WatchlistNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "watchlist_not_found", "message": str(e)},
+        )
+    except Exception as e:
+        logger.error("删除自选股失败: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "internal_error", "message": f"删除自选股失败: {str(e)}"},
+        )
 
 
 @router.get(

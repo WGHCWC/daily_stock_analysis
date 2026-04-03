@@ -40,6 +40,8 @@ from sqlalchemy import (
     delete,
     desc,
     func,
+    inspect,
+    text,
 )
 from sqlalchemy.orm import (
     declarative_base,
@@ -421,6 +423,79 @@ class LLMUsage(Base):
     called_at = Column(DateTime, default=datetime.now, index=True)
 
 
+class WatchlistStock(Base):
+    """自选股元数据表。"""
+
+    __tablename__ = 'watchlist_stocks'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    code = Column(String(16), nullable=False, unique=True, index=True)
+    name = Column(String(64))
+    added_at = Column(DateTime, default=datetime.now, nullable=False, index=True)
+    added_price = Column(Float)
+    cached_price = Column(Float)
+    cached_gain_percent = Column(Float)
+    cache_market_date = Column(Date)
+    cache_updated_at = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False, index=True)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "code": self.code,
+            "name": self.name,
+            "added_at": self.added_at.isoformat() if self.added_at else None,
+            "added_price": self.added_price,
+            "cached_price": self.cached_price,
+            "cached_gain_percent": self.cached_gain_percent,
+            "cache_market_date": self.cache_market_date.isoformat() if self.cache_market_date else None,
+            "cache_updated_at": self.cache_updated_at.isoformat() if self.cache_updated_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class OperationLog(Base):
+    """通用操作日志表。"""
+
+    __tablename__ = 'operation_logs'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    category = Column(String(32), nullable=False, index=True)
+    action = Column(String(32), nullable=False, index=True)
+    level = Column(String(16), nullable=False, default="info", index=True)
+    status = Column(String(16), nullable=False, default="success", index=True)
+    title = Column(String(128), nullable=False)
+    message = Column(Text, nullable=False)
+    stock_code = Column(String(16), index=True)
+    stock_name = Column(String(64))
+    task_id = Column(String(64), index=True)
+    details_json = Column(Text)
+    created_at = Column(DateTime, default=datetime.now, nullable=False, index=True)
+
+    def to_dict(self) -> Dict[str, Any]:
+        details: Optional[Dict[str, Any]] = None
+        if self.details_json:
+            try:
+                details = json.loads(self.details_json)
+            except (TypeError, ValueError):
+                details = None
+        return {
+            "id": self.id,
+            "category": self.category,
+            "action": self.action,
+            "level": self.level,
+            "status": self.status,
+            "title": self.title,
+            "message": self.message,
+            "stock_code": self.stock_code,
+            "stock_name": self.stock_name,
+            "task_id": self.task_id,
+            "details": details,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class DatabaseManager:
     """
     数据库管理器 - 单例模式
@@ -467,10 +542,12 @@ class DatabaseManager:
             bind=self._engine,
             autocommit=False,
             autoflush=False,
+            expire_on_commit=False,
         )
         
         # 创建所有表
         Base.metadata.create_all(self._engine)
+        self._ensure_watchlist_schema()
 
         self._initialized = True
         logger.info(f"数据库初始化完成: {db_url}")
@@ -483,6 +560,8 @@ class DatabaseManager:
         """获取单例实例"""
         if cls._instance is None:
             cls._instance = cls()
+        elif not getattr(cls._instance, '_initialized', False):
+            cls._instance.__init__()
         return cls._instance
     
     @classmethod
@@ -510,6 +589,35 @@ class DatabaseManager:
                 logger.debug("数据库引擎已清理")
         except Exception as e:
             logger.warning(f"清理数据库引擎时出错: {e}")
+
+    def _ensure_watchlist_schema(self) -> None:
+        """Lightweight SQLite-safe column migration for watchlist cache fields."""
+        try:
+            inspector = inspect(self._engine)
+            if 'watchlist_stocks' not in inspector.get_table_names():
+                return
+
+            existing_columns = {column["name"] for column in inspector.get_columns("watchlist_stocks")}
+            wanted_columns = {
+                "cached_price": "FLOAT",
+                "cached_gain_percent": "FLOAT",
+                "cache_market_date": "DATE",
+                "cache_updated_at": "DATETIME",
+            }
+            missing_columns = {
+                name: ddl for name, ddl in wanted_columns.items() if name not in existing_columns
+            }
+            if not missing_columns:
+                return
+
+            with self._engine.begin() as connection:
+                for column_name, ddl in missing_columns.items():
+                    connection.execute(
+                        text(f"ALTER TABLE watchlist_stocks ADD COLUMN {column_name} {ddl}")
+                    )
+            logger.info("watchlist_stocks schema upgraded with columns: %s", ", ".join(missing_columns.keys()))
+        except Exception as exc:
+            logger.warning("watchlist_stocks schema check failed: %s", exc)
     
     def get_session(self) -> Session:
         """

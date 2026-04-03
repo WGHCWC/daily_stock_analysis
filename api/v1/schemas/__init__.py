@@ -37,6 +37,18 @@ from api.v1.schemas.stocks import (
     StockQuote,
     StockHistoryResponse,
     KLineData,
+    WatchlistStockItem,
+    WatchlistResponse,
+    WatchlistAddRequest,
+    WatchlistAddResponse,
+    WatchlistBatchAddRequest,
+    WatchlistBatchAddResultItem,
+    WatchlistBatchTaskResponse,
+    WatchlistDeleteResponse,
+)
+from api.v1.schemas.logs import (
+    OperationLogItem,
+    OperationLogListResponse,
 )
 from api.v1.schemas.backtest import (
     BacktestRunRequest,
@@ -90,6 +102,17 @@ __all__ = [
     "StockQuote",
     "StockHistoryResponse",
     "KLineData",
+    "WatchlistStockItem",
+    "WatchlistResponse",
+    "WatchlistAddRequest",
+    "WatchlistAddResponse",
+    "WatchlistBatchAddRequest",
+    "WatchlistBatchAddResultItem",
+    "WatchlistBatchTaskResponse",
+    "WatchlistDeleteResponse",
+    # logs
+    "OperationLogItem",
+    "OperationLogListResponse",
     # backtest
     "BacktestRunRequest",
     "BacktestRunResponse",

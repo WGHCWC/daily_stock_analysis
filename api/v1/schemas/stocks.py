@@ -109,3 +109,72 @@ class StockHistoryResponse(BaseModel):
                 "data": []
             }
         }
+
+
+class WatchlistStockItem(BaseModel):
+    """自选股管理页条目。"""
+
+    code: str = Field(..., description="股票代码")
+    name: str = Field(..., description="股票名称")
+    added_at: Optional[str] = Field(None, description="添加时间")
+    added_price: Optional[float] = Field(None, description="添加时价格")
+    current_price: Optional[float] = Field(None, description="当前价格")
+    gain_percent: Optional[float] = Field(None, description="添加后涨跌幅 (%)")
+    updated_at: Optional[str] = Field(None, description="最近行情刷新时间")
+
+
+class WatchlistResponse(BaseModel):
+    """自选股列表响应。"""
+
+    items: List[WatchlistStockItem] = Field(default_factory=list, description="自选股列表")
+
+
+class WatchlistAddRequest(BaseModel):
+    """新增自选股请求。"""
+
+    code: str = Field(..., min_length=1, description="股票代码")
+    name: Optional[str] = Field(None, description="股票名称（可选）")
+
+
+class WatchlistAddResponse(BaseModel):
+    """新增自选股响应。"""
+
+    success: bool = Field(True, description="是否添加成功")
+    item: WatchlistStockItem = Field(..., description="新增后的自选股条目")
+
+
+class WatchlistBatchAddRequest(BaseModel):
+    """批量新增自选股请求。"""
+
+    codes: List[str] = Field(..., min_length=1, description="股票代码列表")
+    name: Optional[str] = Field(None, description="股票名称，仅单只股票时生效")
+
+
+class WatchlistBatchAddResultItem(BaseModel):
+    """批量新增任务中的单条结果。"""
+
+    code: str = Field(..., description="股票代码")
+    status: str = Field(..., description="处理状态：success / error")
+    message: str = Field(..., description="处理结果说明")
+    item: Optional[WatchlistStockItem] = Field(None, description="成功新增后的自选股条目")
+
+
+class WatchlistBatchTaskResponse(BaseModel):
+    """批量新增任务状态响应。"""
+
+    task_id: str = Field(..., description="任务 ID")
+    status: str = Field(..., description="任务状态：running / cancelling / cancelled / completed / failed")
+    total: int = Field(..., ge=0, description="总任务数")
+    completed: int = Field(..., ge=0, description="已处理数量")
+    results: List[WatchlistBatchAddResultItem] = Field(default_factory=list, description="逐条处理结果")
+    error_message: Optional[str] = Field(None, description="任务级错误信息")
+    created_at: Optional[str] = Field(None, description="任务创建时间")
+    updated_at: Optional[str] = Field(None, description="任务更新时间")
+    finished_at: Optional[str] = Field(None, description="任务结束时间")
+
+
+class WatchlistDeleteResponse(BaseModel):
+    """删除自选股响应。"""
+
+    success: bool = Field(True, description="是否删除成功")
+    code: str = Field(..., description="已删除的股票代码")

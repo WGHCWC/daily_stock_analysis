@@ -17,7 +17,9 @@ from sqlalchemy.orm import Session
 
 from src.storage import DatabaseManager
 from src.config import get_config, Config
+from src.services.operation_log_service import OperationLogService
 from src.services.system_config_service import SystemConfigService
+from src.services.watchlist_service import WatchlistService
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -68,4 +70,22 @@ def get_system_config_service(request: Request) -> SystemConfigService:
     if service is None:
         service = SystemConfigService()
         request.app.state.system_config_service = service
+    return service
+
+
+def get_watchlist_service(request: Request) -> WatchlistService:
+    """Get app-lifecycle shared WatchlistService instance."""
+    service = getattr(request.app.state, "watchlist_service", None)
+    if service is None:
+        service = WatchlistService()
+        request.app.state.watchlist_service = service
+    return service
+
+
+def get_operation_log_service(request: Request) -> OperationLogService:
+    """Get app-lifecycle shared OperationLogService instance."""
+    service = getattr(request.app.state, "operation_log_service", None)
+    if service is None:
+        service = OperationLogService()
+        request.app.state.operation_log_service = service
     return service

@@ -6,6 +6,7 @@ export type ApiErrorCategory =
   | 'llm_not_configured'
   | 'model_tool_incompatible'
   | 'invalid_tool_call'
+  | 'request_timeout'
   | 'upstream_llm_400'
   | 'upstream_timeout'
   | 'upstream_network'
@@ -356,7 +357,17 @@ export function parseApiError(error: unknown): ParsedApiError {
     });
   }
 
-  if (includesAny(matchText, ['timeout', 'timed out', 'read timeout', 'connect timeout']) || code === 'ECONNABORTED') {
+  if (code === 'ECONNABORTED' && !response) {
+    return createParsedApiError({
+      title: '请求超时',
+      message: '浏览器等待接口响应超过 30 秒，服务可能仍在处理中。可稍后刷新查看结果，或检查当前服务负载与网络状况。',
+      rawMessage,
+      status,
+      category: 'request_timeout',
+    });
+  }
+
+  if (includesAny(matchText, ['timeout', 'timed out', 'read timeout', 'connect timeout'])) {
     return createParsedApiError({
       title: '连接上游服务超时',
       message: '服务端访问外部依赖时超时，请稍后重试，或检查当前网络与代理设置。',

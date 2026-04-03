@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiErrorAlert, ConfirmDialog } from '../components/common';
 import { getParsedApiError } from '../api/error';
 import type { HistoryItem, AnalysisReport, TaskInfo } from '../types/analysis';
@@ -25,6 +25,7 @@ const HomePage: React.FC = () => {
     setError: setStoreError,
   } = useAnalysisStore();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Input state
   const [stockCode, setStockCode] = useState('');
@@ -56,6 +57,7 @@ const HomePage: React.FC = () => {
 
   // Used to track the current analysis request to avoid race conditions
   const analysisRequestIdRef = useRef<number>(0);
+  const handledSearchAnalyzeRef = useRef<string | null>(null);
 
   // Update task in task list
   const updateTask = useCallback((updatedTask: TaskInfo) => {
@@ -324,9 +326,8 @@ const HomePage: React.FC = () => {
     }
   };
 
-  // Analyze stock (async mode)
-  const handleAnalyze = async () => {
-    const { valid, message, normalized } = validateStockCode(stockCode);
+  const submitAnalysis = useCallback(async (codeValue: string) => {
+    const { valid, message, normalized } = validateStockCode(codeValue);
     if (!valid) {
       setInputError(message);
       return;
@@ -369,7 +370,33 @@ const HomePage: React.FC = () => {
       setIsAnalyzing(false);
       setLoading(false);
     }
+  }, [setLoading, setStoreError]);
+
+  // Analyze stock (async mode)
+  const handleAnalyze = async () => {
+    await submitAnalysis(stockCode);
   };
+
+  useEffect(() => {
+    const stock = searchParams.get('stock');
+    const shouldAnalyze = searchParams.get('analyze') === '1';
+    const queryKey = stock ? `${stock}:${shouldAnalyze ? '1' : '0'}` : null;
+    if (!stock || handledSearchAnalyzeRef.current === queryKey) {
+      return;
+    }
+
+    handledSearchAnalyzeRef.current = queryKey;
+    setStockCode(stock.toUpperCase());
+
+    const run = async () => {
+      if (shouldAnalyze) {
+        await submitAnalysis(stock);
+      }
+      setSearchParams({}, { replace: true });
+    };
+
+    void run();
+  }, [searchParams, setSearchParams, submitAnalysis]);
 
   // Submit on Enter key
   const handleKeyDown = (e: React.KeyboardEvent) => {
