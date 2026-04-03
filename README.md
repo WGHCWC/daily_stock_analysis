@@ -243,6 +243,12 @@ LITELLM_MODEL=openai/deepseek-chat
 > Docker 部署、定时任务配置请参考 [完整指南](docs/full-guide.md)
 > 桌面客户端打包请参考 [桌面端打包说明](docs/desktop-package.md)
 
+Docker 全量重建发布可直接执行仓库根目录下的 `start.sh`：
+
+```bash
+./start.sh
+```
+
 ## 📱 推送效果
 
 ### 决策仪表盘
