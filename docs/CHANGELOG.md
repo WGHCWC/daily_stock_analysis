@@ -10,8 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- 🛠️ **Legacy Docker Compose build compatibility** — `start.sh` now sets `COMPOSE_BAKE=false` so full rebuild deploys continue to work on servers with older Docker Buildx plugins
-- 🚀 **Docker full rebuild script** — added root `start.sh` to run `down -> build --no-cache -> up -d` for full Docker Compose deployment refresh
+- 🛠️ **Docker rebuild compatibility script** — `start.sh` now rebuilds via classic `DOCKER_BUILDKIT=0 docker build` and then runs `docker compose up -d --no-build --force-recreate`, avoiding `compose build` / Buildx version requirements on older servers
 - 🔔 **Server酱3 Web settings entry** — notification settings now expose `SERVERCHAN3_SENDKEY` with dedicated UI copy so Server酱 can be configured directly from the Web settings page
 - ⚙️ **Tushare proxy + fallback config** — Web settings now expose `TUSHARE_PROXY_URL` and `TUSHARE_PROXY_TOKEN`; Tushare requests prefer the proxy endpoint and automatically fallback to the official endpoint with `TUSHARE_TOKEN` on failure
 - 🗑️ **History batch deletion** — Web UI now supports multi-selection and batch deletion of analysis history; added `POST /api/v1/history/batch-delete` endpoint and `ConfirmDialog` component.

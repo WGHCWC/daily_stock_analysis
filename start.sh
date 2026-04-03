@@ -4,11 +4,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="$ROOT_DIR/docker/docker-compose.yml"
-
-# Docker Compose v2 may route builds through buildx bake by default.
-# Some servers still ship an older buildx plugin, so force classic compose
-# build mode for wider compatibility.
-export COMPOSE_BAKE=false
+IMAGE_NAME="daily-stock-analysis:latest"
 
 if command -v docker-compose >/dev/null 2>&1; then
   COMPOSE_CMD=(docker-compose)
@@ -23,15 +19,16 @@ cd "$ROOT_DIR"
 
 echo "==> Using compose command: ${COMPOSE_CMD[*]}"
 echo "==> Compose file: $COMPOSE_FILE"
-echo "==> COMPOSE_BAKE=$COMPOSE_BAKE"
+echo "==> Image name: $IMAGE_NAME"
+echo "==> Mode: full rebuild without compose build"
 echo "==> Step 1/3: stopping existing containers"
 "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" down
 
-echo "==> Step 2/3: rebuilding images with no cache"
-"${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" build --no-cache
+echo "==> Step 2/3: rebuilding image with classic docker build"
+DOCKER_BUILDKIT=0 docker build -f docker/Dockerfile -t "$IMAGE_NAME" .
 
-echo "==> Step 3/3: starting containers"
-"${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" up -d
+echo "==> Step 3/3: starting containers without compose build"
+"${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" up -d --no-build --force-recreate
 
 echo "==> Current container status"
 "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" ps
