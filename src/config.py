@@ -265,6 +265,8 @@ class Config:
 
     # === 数据源 API Token ===
     tushare_token: Optional[str] = None
+    tushare_proxy_url: Optional[str] = None
+    tushare_proxy_token: Optional[str] = None
     
     # === AI 分析配置 ===
     # LiteLLM unified model config (provider/model format, e.g. gemini/gemini-2.5-flash)
@@ -833,6 +835,8 @@ class Config:
             feishu_app_secret=os.getenv('FEISHU_APP_SECRET'),
             feishu_folder_token=os.getenv('FEISHU_FOLDER_TOKEN'),
             tushare_token=os.getenv('TUSHARE_TOKEN'),
+            tushare_proxy_url=os.getenv('TUSHARE_PROXY_URL'),
+            tushare_proxy_token=os.getenv('TUSHARE_PROXY_TOKEN'),
             litellm_model=litellm_model,
             litellm_fallback_models=litellm_fallback_models,
             llm_temperature=resolve_unified_llm_temperature(litellm_model),
@@ -1310,9 +1314,10 @@ class Config:
         """
         Resolve realtime source priority with automatic tushare injection.
 
-        When TUSHARE_TOKEN is configured but REALTIME_SOURCE_PRIORITY is not
-        explicitly set, automatically prepend 'tushare' to the default priority
-        so that the paid data source is utilized for realtime quotes as well.
+        When an official Tushare token or proxy credentials are configured but
+        REALTIME_SOURCE_PRIORITY is not explicitly set, automatically prepend
+        'tushare' to the default priority so that the paid data source is
+        utilized for realtime quotes as well.
         """
         explicit = os.getenv('REALTIME_SOURCE_PRIORITY')
         default_priority = 'tencent,akshare_sina,efinance,akshare_em'
@@ -1322,14 +1327,16 @@ class Config:
             return explicit
 
         tushare_token = os.getenv('TUSHARE_TOKEN', '').strip()
-        if tushare_token:
-            # Token configured but no explicit priority override
+        tushare_proxy_url = os.getenv('TUSHARE_PROXY_URL', '').strip()
+        tushare_proxy_token = os.getenv('TUSHARE_PROXY_TOKEN', '').strip()
+        if tushare_token or (tushare_proxy_url and tushare_proxy_token):
+            # Tushare credentials configured but no explicit priority override
             # Prepend tushare so the paid source is tried first
             import logging
             logger = logging.getLogger(__name__)
             resolved = f'tushare,{default_priority}'
             logger.info(
-                f"TUSHARE_TOKEN detected, auto-injecting tushare into realtime priority: {resolved}"
+                f"Tushare credentials detected, auto-injecting tushare into realtime priority: {resolved}"
             )
             return resolved
 
@@ -1423,10 +1430,13 @@ class Config:
             ))
 
         # --- Data sources (informational only) ---
-        if not self.tushare_token:
+        has_tushare_backend = bool(
+            self.tushare_token or (self.tushare_proxy_url and self.tushare_proxy_token)
+        )
+        if not has_tushare_backend:
             issues.append(ConfigIssue(
                 severity="info",
-                message="未配置 Tushare Token，将使用其他数据源",
+                message="未配置 Tushare 官方 Token 或代理配置，将使用其他数据源",
                 field="TUSHARE_TOKEN",
             ))
 

@@ -83,6 +83,11 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         self.assertFalse(validation["valid"])
         self.assertTrue(any(issue["code"] == "invalid_url" for issue in validation["issues"]))
 
+    def test_validate_reports_invalid_tushare_proxy_url(self) -> None:
+        validation = self.service.validate(items=[{"key": "TUSHARE_PROXY_URL", "value": "proxy.local/tushare"}])
+        self.assertFalse(validation["valid"])
+        self.assertTrue(any(issue["key"] == "TUSHARE_PROXY_URL" and issue["code"] == "invalid_url" for issue in validation["issues"]))
+
     def test_validate_reports_invalid_llm_channel_definition(self) -> None:
         validation = self.service.validate(
             items=[

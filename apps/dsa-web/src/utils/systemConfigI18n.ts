@@ -24,7 +24,9 @@ const categoryDescriptionMap: Partial<Record<SystemConfigCategory, string>> = {
 
 const fieldTitleMap: Record<string, string> = {
   STOCK_LIST: '自选股列表',
-  TUSHARE_TOKEN: 'Tushare Token',
+  TUSHARE_PROXY_URL: 'Tushare 代理地址',
+  TUSHARE_PROXY_TOKEN: 'Tushare 代理 Token',
+  TUSHARE_TOKEN: 'Tushare 官方回退 Token',
   BOCHA_API_KEYS: 'Bocha API Keys',
   TAVILY_API_KEYS: 'Tavily API Keys',
   SERPAPI_API_KEYS: 'SerpAPI API Keys',
@@ -50,6 +52,7 @@ const fieldTitleMap: Record<string, string> = {
   DINGTALK_APP_KEY: '钉钉 App Key',
   DINGTALK_APP_SECRET: '钉钉 App Secret',
   PUSHPLUS_TOKEN: 'PushPlus Token',
+  SERVERCHAN3_SENDKEY: 'Server酱3 SendKey',
   REPORT_SUMMARY_ONLY: '仅分析结果摘要',
   SCHEDULE_TIME: '定时任务时间',
   HTTP_PROXY: 'HTTP 代理',
@@ -75,7 +78,9 @@ const fieldTitleMap: Record<string, string> = {
 
 const fieldDescriptionMap: Record<string, string> = {
   STOCK_LIST: '使用逗号分隔股票代码，例如：600519,300750。',
-  TUSHARE_TOKEN: '用于接入 Tushare Pro 数据服务的凭据。',
+  TUSHARE_PROXY_URL: '可选的 Tushare 代理接口地址，填写后会优先通过代理请求。',
+  TUSHARE_PROXY_TOKEN: '访问 Tushare 代理接口时使用的 Token。',
+  TUSHARE_TOKEN: '官方 Tushare Pro Token；未配置代理时直接使用，配置代理后在代理失败时作为回退凭据。',
   BOCHA_API_KEYS: '用于新闻检索的 Bocha 密钥，支持逗号分隔多个（最高优先级）。',
   TAVILY_API_KEYS: '用于新闻检索的 Tavily 密钥，支持逗号分隔多个。',
   SERPAPI_API_KEYS: '用于新闻检索的 SerpAPI 密钥，支持逗号分隔多个。',
@@ -101,6 +106,7 @@ const fieldDescriptionMap: Record<string, string> = {
   DINGTALK_APP_KEY: '钉钉应用模式 App Key。',
   DINGTALK_APP_SECRET: '钉钉应用模式 App Secret。',
   PUSHPLUS_TOKEN: 'PushPlus 推送令牌。',
+  SERVERCHAN3_SENDKEY: 'Server酱3 / ServerChan SendKey，配置后可通过 Server酱 App 接收推送。',
   REPORT_SUMMARY_ONLY: '仅推送分析结果摘要，不包含个股详情。多股时适合快速浏览。',
   SCHEDULE_TIME: '每日定时任务执行时间，格式为 HH:MM。',
   HTTP_PROXY: '网络代理地址，可留空。',

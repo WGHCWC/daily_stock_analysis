@@ -118,7 +118,9 @@ daily_stock_analysis/
 | `BRAVE_API_KEYS` | [Brave Search](https://brave.com/search/api/) API（隐私优先，美股优化，多个key用逗号分隔） | 可选 |
 | `SERPAPI_API_KEYS` | [SerpAPI](https://serpapi.com/baidu-search-api?utm_source=github_daily_stock_analysis) 备用搜索 | 可选 |
 | `SEARXNG_BASE_URLS` | SearXNG 自建实例（无配额兜底，需在 settings.yml 启用 format: json） | 可选 |
-| `TUSHARE_TOKEN` | [Tushare Pro](https://tushare.pro/weborder/#/login?reg=834638 ) Token | 可选 |
+| `TUSHARE_PROXY_URL` | Tushare 代理接口地址；配置后优先通过代理请求 | 可选 |
+| `TUSHARE_PROXY_TOKEN` | Tushare 代理接口对应 Token | 可选 |
+| `TUSHARE_TOKEN` | [Tushare Pro](https://tushare.pro/weborder/#/login?reg=834638 ) 官方 Token；未配置代理时直接使用，配置代理时作为回退 Token | 可选 |
 | `ENABLE_CHIP_DISTRIBUTION` | 启用筹码分布（Actions 默认 false；需筹码数据时在 Variables 中设为 true，接口可能不稳定） | 可选 |
 
 #### ✅ 最小配置示例
@@ -235,7 +237,9 @@ daily_stock_analysis/
 
 | 变量名 | 说明 | 默认值 | 必填 |
 |--------|------|--------|:----:|
-| `TUSHARE_TOKEN` | Tushare Pro Token | - | 可选 |
+| `TUSHARE_PROXY_URL` | Tushare 代理接口地址 | - | 可选 |
+| `TUSHARE_PROXY_TOKEN` | Tushare 代理 Token | - | 可选 |
+| `TUSHARE_TOKEN` | Tushare 官方 / 回退 Token | - | 可选 |
 | `ENABLE_REALTIME_QUOTE` | 启用实时行情（关闭后使用历史收盘价分析） | `true` | 可选 |
 | `ENABLE_REALTIME_TECHNICAL_INDICATORS` | 盘中实时技术面：启用时用实时价计算 MA5/MA10/MA20 与多头排列（Issue #234）；关闭则用昨日收盘 | `true` | 可选 |
 | `ENABLE_CHIP_DISTRIBUTION` | 启用筹码分布分析（该接口不稳定，云端部署建议关闭）。GitHub Actions 用户需在 Repository Variables 中设置 `ENABLE_CHIP_DISTRIBUTION=true` 方可启用；workflow 默认关闭。 | `true` | 可选 |
@@ -642,7 +646,9 @@ PUSHOVER_API_TOKEN=your_api_token
 ### Tushare Pro
 - 需要注册获取 Token
 - 更稳定，数据更全
-- 设置 `TUSHARE_TOKEN`
+- 可在 Web 设置中填写 `TUSHARE_PROXY_URL` + `TUSHARE_PROXY_TOKEN`
+- 也可只设置 `TUSHARE_TOKEN`
+- 当代理请求失败时，会自动回退到官方接口并使用 `TUSHARE_TOKEN`
 
 ### Baostock
 - 免费，无需配置

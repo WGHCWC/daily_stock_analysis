@@ -10,7 +10,7 @@
 3. 防封禁流控策略
 
 数据源优先级（动态调整）：
-【配置了 TUSHARE_TOKEN 时】
+【配置了 Tushare 官方 Token 或代理配置时】
 1. TushareFetcher (Priority 0) - 🔥 最高优先级（动态提升）
 2. EfinanceFetcher (Priority 0) - 同优先级
 3. AkshareFetcher (Priority 1) - 来自 akshare 库
@@ -18,7 +18,7 @@
 5. BaostockFetcher (Priority 3) - 来自 baostock 库
 6. YfinanceFetcher (Priority 4) - 来自 yfinance 库
 
-【未配置 TUSHARE_TOKEN 时】
+【未配置 Tushare 官方 Token 与代理配置时】
 1. EfinanceFetcher (Priority 0) - 最高优先级，来自 efinance 库
 2. AkshareFetcher (Priority 1) - 来自 akshare 库
 3. PytdxFetcher (Priority 2) - 来自 pytdx 库（通达信）

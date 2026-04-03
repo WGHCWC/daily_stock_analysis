@@ -16,6 +16,7 @@ TushareFetcher - 备用数据源 1 (Priority 2)
 
 import json as _json
 import logging
+import os
 import re
 import time
 from datetime import datetime
@@ -34,7 +35,6 @@ from tenacity import (
 from .base import BaseFetcher, DataFetchError, RateLimitError, STANDARD_COLUMNS,is_bse_code, is_st_stock, is_kc_cy_stock, normalize_stock_code
 from .realtime_types import UnifiedRealtimeQuote
 from src.config import get_config
-import os
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
@@ -91,6 +91,7 @@ class TushareFetcher(BaseFetcher):
     
     name = "TushareFetcher"
     priority = int(os.getenv("TUSHARE_PRIORITY", "2"))  # 默认优先级，会在 __init__ 中根据配置动态调整
+    OFFICIAL_TUSHARE_API_URL = "http://api.tushare.pro"
 
     def __init__(self, rate_limit_per_minute: int = 80):
         """
@@ -103,6 +104,7 @@ class TushareFetcher(BaseFetcher):
         self._call_count = 0  # 当前分钟内的调用次数
         self._minute_start: Optional[float] = None  # 当前计数周期开始时间
         self._api: Optional[object] = None  # Tushare API 实例
+        self._request_backends: List[Dict[str, str]] = []
 
         # 尝试初始化 API
         self._init_api()
@@ -114,76 +116,142 @@ class TushareFetcher(BaseFetcher):
         """
         初始化 Tushare API
         
-        如果 Token 未配置，此数据源将不可用
+        如果官方 Token 与代理配置都未就绪，此数据源将不可用
         """
         config = get_config()
-        
-        if not config.tushare_token:
-            logger.warning("Tushare Token 未配置，此数据源不可用")
+
+        request_backends = self._build_request_backends(config)
+        if not request_backends:
+            logger.warning("Tushare 官方 Token 与代理配置均未就绪，此数据源不可用")
             return
         
         try:
             import tushare as ts
-            
+
+            active_backend = request_backends[0]
+
             # Set Token
-            ts.set_token(config.tushare_token)
+            ts.set_token(active_backend["token"])
             
             # Get API instance
             self._api = ts.pro_api()
             
             # Fix: tushare SDK 1.4.x hardcodes api.waditu.com/dataapi which may
-            # be unavailable (503). Monkey-patch the query method to use the
-            # official api.tushare.pro endpoint which posts to root URL.
-            self._patch_api_endpoint(config.tushare_token)
+            # be unavailable (503). Monkey-patch the query method so requests
+            # can first hit a configured proxy endpoint, then fallback to the
+            # official api.tushare.pro endpoint when needed.
+            self._request_backends = request_backends
+            self._patch_api_endpoint(request_backends)
 
-            logger.info("Tushare API 初始化成功")
+            logger.info("Tushare API 初始化成功，当前主请求端点: %s", active_backend["url"])
             
         except Exception as e:
             logger.error(f"Tushare API 初始化失败: {e}")
             self._api = None
+            self._request_backends = []
 
-    def _patch_api_endpoint(self, token: str) -> None:
+    @classmethod
+    def _build_request_backends(cls, config: Any) -> List[Dict[str, str]]:
         """
-        Patch tushare SDK to use the official api.tushare.pro endpoint.
+        Build ordered Tushare request backends with proxy-first fallback.
+
+        Priority:
+        1. Configured proxy URL + proxy token
+        2. Official endpoint + TUSHARE_TOKEN (backward compatible fallback)
+        """
+        backends: List[Dict[str, str]] = []
+
+        proxy_url = str(getattr(config, "tushare_proxy_url", "") or "").strip()
+        proxy_token = str(getattr(config, "tushare_proxy_token", "") or "").strip()
+        fallback_token = str(getattr(config, "tushare_token", "") or "").strip()
+
+        if proxy_url and proxy_token:
+            backends.append(
+                {
+                    "name": "proxy",
+                    "url": proxy_url,
+                    "token": proxy_token,
+                }
+            )
+        elif proxy_url and not proxy_token:
+            logger.warning("已配置 TUSHARE_PROXY_URL，但缺少 TUSHARE_PROXY_TOKEN，跳过代理端点")
+
+        if fallback_token:
+            backends.append(
+                {
+                    "name": "official",
+                    "url": cls.OFFICIAL_TUSHARE_API_URL,
+                    "token": fallback_token,
+                }
+            )
+
+        return backends
+
+    def _patch_api_endpoint(self, request_backends: List[Dict[str, str]]) -> None:
+        """
+        Patch tushare SDK to use proxy-first Tushare endpoints with fallback.
 
         The SDK (v1.4.x) hardcodes http://api.waditu.com/dataapi and appends
         /{api_name} to the URL. That endpoint may return 503, causing silent
-        empty-DataFrame failures. This method replaces the query method to
-        POST directly to http://api.tushare.pro (root URL, no path suffix).
+        empty-DataFrame failures. This method replaces the query method to POST
+        directly to the configured proxy URL first, then fallback to the
+        official http://api.tushare.pro root URL when a proxy request fails.
         """
         import types
 
-        TUSHARE_API_URL = "http://api.tushare.pro"
-        _token = token
+        _backends = tuple(request_backends)
         _timeout = getattr(self._api, '_DataApi__timeout', 30)
 
         def patched_query(self_api, api_name, fields='', **kwargs):
             req_params = {
                 'api_name': api_name,
-                'token': _token,
                 'params': kwargs,
                 'fields': fields,
             }
-            res = requests.post(TUSHARE_API_URL, json=req_params, timeout=_timeout)
-            if res.status_code != 200:
-                raise Exception(f"Tushare API HTTP {res.status_code}")
-            result = _json.loads(res.text)
-            if result['code'] != 0:
-                raise Exception(result['msg'])
-            data = result['data']
-            columns = data['fields']
-            items = data['items']
-            return pd.DataFrame(items, columns=columns)
+
+            errors: List[str] = []
+            for index, backend in enumerate(_backends):
+                request_payload = dict(req_params, token=backend["token"])
+                try:
+                    res = requests.post(backend["url"], json=request_payload, timeout=_timeout)
+                    if res.status_code != 200:
+                        raise Exception(f"Tushare API HTTP {res.status_code}")
+                    result = _json.loads(res.text)
+                    if result['code'] != 0:
+                        raise Exception(result['msg'])
+                    data = result['data']
+                    columns = data['fields']
+                    items = data['items']
+
+                    if index > 0:
+                        logger.warning("Tushare 请求已回退到 %s 端点并成功返回", backend["name"])
+
+                    return pd.DataFrame(items, columns=columns)
+                except Exception as exc:
+                    errors.append(f'{backend["name"]}: {exc}')
+                    if index < len(_backends) - 1:
+                        logger.warning(
+                            "Tushare %s 端点请求失败，准备切换到下一个端点: %s",
+                            backend["name"],
+                            exc,
+                        )
+                        continue
+                    raise Exception(" | ".join(errors)) from exc
+
+            raise Exception("Tushare backend is not configured")
 
         self._api.query = types.MethodType(patched_query, self._api)
-        logger.debug(f"Tushare API endpoint patched to {TUSHARE_API_URL}")
+        logger.debug(
+            "Tushare API endpoint patched with backends: %s",
+            ", ".join(f'{backend["name"]}={backend["url"]}' for backend in _backends),
+        )
 
     def _determine_priority(self) -> int:
         """
-        根据 Token 配置和 API 初始化状态确定优先级
+        根据 Tushare 凭据配置和 API 初始化状态确定优先级
 
         策略：
-        - Token 配置且 API 初始化成功：优先级 -1（绝对最高，优于 efinance）
+        - 凭据配置且 API 初始化成功：优先级 -1（绝对最高，优于 efinance）
         - 其他情况：优先级 2（默认）
 
         Returns:
@@ -191,12 +259,15 @@ class TushareFetcher(BaseFetcher):
         """
         config = get_config()
 
-        if config.tushare_token and self._api is not None:
-            # Token 配置且 API 初始化成功，提升为最高优先级
-            logger.info("✅ 检测到 TUSHARE_TOKEN 且 API 初始化成功，Tushare 数据源优先级提升为最高 (Priority -1)")
+        has_tushare_backend = bool(
+            config.tushare_token or (config.tushare_proxy_url and config.tushare_proxy_token)
+        )
+        if has_tushare_backend and self._api is not None:
+            # 凭据配置且 API 初始化成功，提升为最高优先级
+            logger.info("✅ 检测到可用 Tushare 凭据且 API 初始化成功，Tushare 数据源优先级提升为最高 (Priority -1)")
             return -1
 
-        # Token 未配置或 API 初始化失败，保持默认优先级
+        # 未配置可用凭据或 API 初始化失败，保持默认优先级
         return 2
 
     def is_available(self) -> bool:
